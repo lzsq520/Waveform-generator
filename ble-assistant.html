@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>蓝牙扫描配对助手</title>
+  <!-- 引入 Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    textarea {
+      resize: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container mt-5">
+    <h1 class="text-center mb-4">蓝牙扫描配对助手</h1>
+
+    <!-- 第一行按钮 -->
+    <div class="d-flex justify-content-start gap-2 mb-3">
+      <button id="connectButton" class="btn btn-primary">连接串口</button>
+      <button id="disconnectButton" class="btn btn-secondary" disabled>断开连接</button>
+      <button id="clearOutputButton" class="btn btn-danger">清空输出</button>
+    </div>
+
+    <!-- 串口输出框 -->
+    <div class="mb-3">
+      <label for="output" class="form-label">串口输出</label>
+      <textarea id="output" class="form-control" rows="8" readonly placeholder="串口输出..."></textarea>
+    </div>
+
+    <!-- 发送数据 -->
+    <div class="mb-3">
+      <label for="input" class="form-label">发送数据</label>
+      <div class="input-group">
+        <textarea id="input" class="form-control" placeholder="输入发送的数据..."></textarea>
+        <button id="sendButton" class="btn btn-success" disabled>发送数据</button>
+      </div>
+    </div>
+
+    <!-- 第二行按钮 -->
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <button id="sendPlusButton" class="btn btn-warning" disabled>发送 “+++”</button>
+      <button id="sendATButton" class="btn btn-info" disabled>发送 “AT+SCAN”</button>
+    </div>
+
+    <!-- 输入框和按钮 -->
+    <div class="row mb-3">
+      <div class="col-8">
+        <input id="numberInput" type="number" class="form-control" placeholder="输入数字 x">
+      </div>
+      <div class="col-4">
+        <button id="sendConnectButton" class="btn btn-primary w-100" disabled>发送 “AT+CONNECT=x”</button>
+      </div>
+    </div>
+
+    <!-- 发送退出指令按钮 -->
+    <div class="mb-3">
+      <button id="sendExitButton" class="btn btn-danger w-100" disabled>发送 “AT+EXIT”</button>
+    </div>
+  </div>
+
+  <!-- 引入 Bootstrap JS 和 Popper -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    let port;
+    let writer;
+    let reader;
+
+    async function connectToSerial() {
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        document.getElementById("connectButton").disabled = true;
+        document.getElementById("disconnectButton").disabled = false;
+        document.getElementById("sendButton").disabled = false;
+        document.getElementById("sendPlusButton").disabled = false;
+        document.getElementById("sendATButton").disabled = false;
+        document.getElementById("sendConnectButton").disabled = false;
+        document.getElementById("sendExitButton").disabled = false;
+
+        writer = port.writable.getWriter();
+        reader = port.readable.getReader();
+        readSerialData();
+      } catch (error) {
+        console.error("无法连接到串口:", error);
+      }
+    }
+
+    async function disconnectFromSerial() {
+      try {
+        if (reader) {
+          await reader.cancel();
+          reader.releaseLock();
+        }
+        if (writer) {
+          writer.releaseLock();
+        }
+        if (port) {
+          await port.close();
+        }
+        document.getElementById("connectButton").disabled = false;
+        document.getElementById("disconnectButton").disabled = true;
+        document.getElementById("sendButton").disabled = true;
+        document.getElementById("sendPlusButton").disabled = true;
+        document.getElementById("sendATButton").disabled = true;
+        document.getElementById("sendConnectButton").disabled = true;
+        document.getElementById("sendExitButton").disabled = true;
+        console.log("串口已断开");
+      } catch (error) {
+        console.error("无法断开串口:", error);
+      }
+    }
+
+    async function readSerialData() {
+      const decoder = new TextDecoder();
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+          document.getElementById("output").value += decoder.decode(value);
+        }
+      } catch (error) {
+        console.error("读取串口数据时出错:", error);
+      }
+    }
+
+    async function sendSerialData(data) {
+      if (!data) {
+        alert("请输入要发送的数据！");
+        return;
+      }
+      try {
+        const encoder = new TextEncoder();
+        await writer.write(encoder.encode(data));
+      } catch (error) {
+        console.error("发送数据失败:", error);
+      }
+    }
+
+    document.getElementById("connectButton").addEventListener("click", connectToSerial);
+    document.getElementById("disconnectButton").addEventListener("click", disconnectFromSerial);
+    document.getElementById("clearOutputButton").addEventListener("click", () => {
+      document.getElementById("output").value = "";
+    });
+    document.getElementById("sendButton").addEventListener("click", () => {
+      const inputField = document.getElementById("input");
+      sendSerialData(inputField.value + "\n");
+      inputField.value = "";
+    });
+    document.getElementById("sendPlusButton").addEventListener("click", () => {
+      sendSerialData("+++");
+    });
+    document.getElementById("sendATButton").addEventListener("click", () => {
+      sendSerialData("AT+SCAN\r\n");
+    });
+    document.getElementById("sendConnectButton").addEventListener("click", () => {
+      const numberInput = document.getElementById("numberInput").value;
+      if (!numberInput) {
+        alert("请输入数字 x！");
+        return;
+      }
+      sendSerialData(`AT+CONNECT=${numberInput}\r\n`);
+    });
+    document.getElementById("sendExitButton").addEventListener("click", () => {
+      sendSerialData("AT+EXIT\r\n");
+    });
+  </script>
+</body>
+</html>

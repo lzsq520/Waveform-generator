@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>波形选择界面</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .input-row {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="text-center">波形控制界面-串口</h1>
+
+        <!-- 串口连接和断开按钮 -->
+        <div class="mb-3">
+            <button id="connect-button" class="btn btn-primary" onclick="connectSerial()">连接串口</button>
+            <button id="disconnect-button" class="btn btn-secondary" onclick="disconnectSerial()" disabled>断开串口</button>
+        </div>
+
+        <div class="mb-3">
+            <label for="waveform-select" class="form-label">波形选择</label>
+            <div id="waveform-select" class="btn-group" role="group" aria-label="Waveform Selection">
+                <button type="button" class="btn btn-outline-primary" onclick="selectWaveform('constant')">恒压</button>
+                <button type="button" class="btn btn-outline-primary" onclick="selectWaveform('sine')">正弦</button>
+                <button type="button" class="btn btn-outline-primary" onclick="selectWaveform('pulse')">脉冲</button>
+                <button type="button" class="btn btn-outline-primary" onclick="selectWaveform('square')">方波</button>
+            </div>
+        </div>
+
+        <form id="waveform-form">
+            <div id="amplitude-row" class="input-row">
+                <label for="amplitude" class="form-label">幅值 (V)</label>
+                <input type="number" class="form-control" id="amplitude" placeholder="请输入幅值 (0-5)V">
+            </div>
+
+            <div id="frequency-row" class="input-row" style="display: none;">
+                <label for="frequency" class="form-label">频率 (Hz)</label>
+                <input type="number" class="form-control" id="frequency" placeholder="请输入频率">
+            </div>
+
+            <div id="duty-cycle-row" class="input-row" style="display: none;">
+                <label for="duty-cycle" class="form-label">占空比 (%)</label>
+                <input type="number" class="form-control" id="duty-cycle" placeholder="请输入占空比 (1-100%)">
+            </div>
+
+            <div class="mt-3">
+                <button type="button" class="btn btn-success" onclick="startWaveform()">启动</button>
+                <button type="button" class="btn btn-danger" onclick="stopWaveform()">停止</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        let selectedWaveform = '';
+        let serialPort = null;
+        let writer = null;
+
+        async function connectSerial() {
+            try {
+                serialPort = await navigator.serial.requestPort();
+                await serialPort.open({ baudRate: 115200 });
+                writer = serialPort.writable.getWriter();
+                document.getElementById('connect-button').disabled = true;
+                document.getElementById('disconnect-button').disabled = false;
+                alert('串口已连接');
+            } catch (error) {
+                alert(`连接串口失败: ${error.message}`);
+            }
+        }
+
+        async function disconnectSerial() {
+            if (writer) {
+                writer.releaseLock();
+                writer = null;
+            }
+            if (serialPort) {
+                await serialPort.close();
+                serialPort = null;
+            }
+            document.getElementById('connect-button').disabled = false;
+            document.getElementById('disconnect-button').disabled = true;
+            alert('串口已断开');
+        }
+
+        function selectWaveform(type) {
+            selectedWaveform = type;
+            document.getElementById('amplitude-row').style.display = 'block';
+            document.getElementById('frequency-row').style.display = 'none';
+            document.getElementById('duty-cycle-row').style.display = 'none';
+
+            const amplitudeInput = document.getElementById('amplitude');
+            const frequencyInput = document.getElementById('frequency');
+            const dutyCycleInput = document.getElementById('duty-cycle');
+
+            if (type === 'constant') {
+                amplitudeInput.placeholder = '请输入幅值 (0-5)V';
+            } else if (type === 'sine') {
+                document.getElementById('frequency-row').style.display = 'block';
+                amplitudeInput.placeholder = '请输入幅值 (0-5)V';
+                frequencyInput.placeholder = '请输入频率（1-200）Hz';
+            } else if (type === 'pulse') {
+                document.getElementById('frequency-row').style.display = 'block';
+                document.getElementById('duty-cycle-row').style.display = 'block';
+                amplitudeInput.placeholder = '请输入幅值 (0-5)V';
+                frequencyInput.placeholder = '请输入频率（1000-10000）Hz';
+                dutyCycleInput.placeholder = '请输入占空比 (1-100)%';
+            } else if (type === 'square') {
+                document.getElementById('frequency-row').style.display = 'block';
+                document.getElementById('duty-cycle-row').style.display = 'block';
+                amplitudeInput.placeholder = '请输入幅值 ±(0-5)V';
+                frequencyInput.placeholder = '请输入频率（1000-10000）Hz';
+                dutyCycleInput.placeholder = '请输入占空比 (1-50)%';
+            }
+
+            const buttons = document.querySelectorAll('#waveform-select .btn');
+            buttons.forEach(button => button.classList.remove('btn-primary'));
+            buttons.forEach(button => button.classList.add('btn-outline-primary'));
+
+            event.target.classList.remove('btn-outline-primary');
+            event.target.classList.add('btn-primary');
+        }
+
+        function calculateFrame(isStart) {
+            const startBytes = [0xE5, 0xEA];
+            const functionCode = 0x2C;
+            const waveformCodes = {
+                constant: 0x05,
+                pulse: 0x50,
+                sine: 0x0A,
+                square: 0xA0
+            };
+
+            const amplitude = Math.round((document.getElementById('amplitude').value || 0) * 50);
+            const frequency = document.getElementById('frequency').value || 0;
+            const dutyCycle = Math.round((document.getElementById('duty-cycle').value || 0) * 2);
+            const startStopCode = isStart ? 0x55 : 0xAA;
+
+            let dataBytes = [
+                waveformCodes[selectedWaveform] || 0x00,
+                amplitude,
+                0x00,
+                0x00,
+                startStopCode,
+                0x00,
+                0x00
+            ];
+
+            if (selectedWaveform === 'sine') {
+                dataBytes[2] = Math.round(frequency);
+            } else if (selectedWaveform === 'pulse' || selectedWaveform === 'square') {
+                dataBytes[2] = Math.round(frequency / 50);
+                dataBytes[3] = Math.round(dutyCycle);
+            }
+
+            const crc = calculateCRC([functionCode, ...dataBytes]);
+
+            return [
+                ...startBytes,
+                functionCode,
+                ...dataBytes,
+                crc & 0xFF,
+                (crc >> 8) & 0xFF
+            ];
+        }
+
+        function calculateCRC(data) {
+            let crc = 0xFFFF;
+            for (let pos = 0; pos < data.length; pos++) {
+                crc ^= data[pos];
+                for (let i = 0; i < 8; i++) {
+                    if ((crc & 0x0001) !== 0) {
+                        crc >>= 1;
+                        crc ^= 0xA001;
+                    } else {
+                        crc >>= 1;
+                    }
+                }
+            }
+            return crc;
+        }
+
+        async function startWaveform() {
+            const frame = calculateFrame(true);
+            const amplitude = document.getElementById('amplitude').value || 'N/A';
+            const frequency = document.getElementById('frequency').value || 'N/A';
+            const dutyCycle = document.getElementById('duty-cycle').value || 'N/A';
+            const waveformName = {
+                constant: '恒压',
+                sine: '正弦',
+                pulse: '脉冲',
+                square: '方波'
+            }[selectedWaveform] || '未选择';
+
+            alert(`启动波形: ${waveformName}\n幅值: ${amplitude} V\n频率: ${frequency} Hz\n占空比: ${dutyCycle} %\n通信帧: ${frame.map(byte => byte.toString(16).padStart(2, '0').toUpperCase()).join(' ')}`);
+
+            if (serialPort && writer) {
+                const data = new Uint8Array(frame);
+                try {
+                    await writer.write(data);
+                    alert('启动数据帧已发送');
+                } catch (error) {
+                    alert(`发送数据帧失败: ${error.message}`);
+                }
+            } else {
+                alert('请先连接串口');
+            }
+        }
+
+        async function stopWaveform() {
+            const frame = calculateFrame(false);
+            const waveformName = {
+                constant: '恒压',
+                sine: '正弦',
+                pulse: '脉冲',
+                square: '方波'
+            }[selectedWaveform] || '未选择';
+
+            alert(`停止波形: ${waveformName}\n通信帧: ${frame.map(byte => byte.toString(16).padStart(2, '0').toUpperCase()).join(' ')}`);
+
+            if (serialPort && writer) {
+                const data = new Uint8Array(frame);
+                try {
+                    await writer.write(data);
+                    alert('停止数据帧已发送');
+                } catch (error) {
+                    alert(`发送数据帧失败: ${error.message}`);
+                }
+            } else {
+                alert('请先连接串口');
+            }
+        }
+    </script>
+</body>
+</html>
