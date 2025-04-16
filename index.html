@@ -21,7 +21,48 @@
         </div>
     </div>
 
+    <!-- Bootstrap 提示模态框 -->
+    <div class="modal fade" id="browserSupportModal" tabindex="-1" aria-labelledby="browserSupportModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="browserSupportModalLabel">重要提示</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>本页面的工具需要浏览器支持以下API：</p>
+                    <ul>
+                        <li><strong>Web Serial API</strong>（串口通信）</li>
+                        <li><strong>Web Bluetooth API</strong>（蓝牙通信）</li>
+                    </ul>
+                    <p>请确保：</p>
+                    <ol>
+                        <li>电脑已安装正确的串口/蓝牙驱动程序</li>
+                        <li>使用支持的浏览器（Chrome 89+ 或 Edge 89+）</li>
+                        <li>在浏览器设置中启用相关API权限</li>
+                    </ol>
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-exclamation-triangle-fill"></i> 注意：串口功能在移动设备上可能不可用
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">我明白了</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <script>
+        // 页面加载完成后自动显示模态框
+        document.addEventListener('DOMContentLoaded', function() {
+            var modal = new bootstrap.Modal(document.getElementById('browserSupportModal'));
+            modal.show();
+        });
+    </script>
 </body>
 </html>
