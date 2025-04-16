@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +9,20 @@
   <style>
     textarea {
       resize: none;
+    }
+    .instructions {
+      background-color: #f8f9fa;
+      border-radius: 5px;
+      padding: 15px;
+      margin-top: 30px;
+    }
+    .step {
+      font-weight: bold;
+      color: #0d6efd;
+    }
+    .divider {
+      border-top: 2px solid #dee2e6;
+      margin: 20px 0;
     }
   </style>
 </head>
@@ -40,8 +54,8 @@
 
     <!-- 第二行按钮 -->
     <div class="d-flex flex-wrap gap-2 mb-3">
-      <button id="sendPlusButton" class="btn btn-warning" disabled>发送 “+++”</button>
-      <button id="sendATButton" class="btn btn-info" disabled>发送 “AT+SCAN”</button>
+      <button id="sendPlusButton" class="btn btn-warning" disabled>发送 "+++"</button>
+      <button id="sendATButton" class="btn btn-info" disabled>发送 "AT+SCAN"</button>
     </div>
 
     <!-- 输入框和按钮 -->
@@ -50,13 +64,57 @@
         <input id="numberInput" type="number" class="form-control" placeholder="输入数字 x">
       </div>
       <div class="col-4">
-        <button id="sendConnectButton" class="btn btn-primary w-100" disabled>发送 “AT+CONNECT=x”</button>
+        <button id="sendConnectButton" class="btn btn-primary w-100" disabled>发送 "AT+CONNECT=x"</button>
       </div>
     </div>
 
     <!-- 发送退出指令按钮 -->
     <div class="mb-3">
-      <button id="sendExitButton" class="btn btn-danger w-100" disabled>发送 “AT+EXIT”</button>
+      <button id="sendExitButton" class="btn btn-danger w-100" disabled>发送 "AT+EXIT"</button>
+    </div>
+
+    <!-- 分隔符 -->
+    <div class="divider"></div>
+
+    <!-- 详细说明部分 -->
+    <div class="instructions">
+      <h4>蓝牙-串口模块蓝牙配对操作指南</h4>
+      <p>此工具用于通过蓝牙-串口模块完成设备扫描、配对和连接操作，请按以下步骤操作：</p>
+      
+      <ol>
+        <li class="mb-2">
+          <strong>1. 进入AT指令模式</strong><br>
+          点击"发送 '+++'"按钮（注意：不需要换行符），等待模块返回"OK"响应<br>
+          <small class="text-muted">※ 此操作将使模块进入AT指令模式</small>
+        </li>
+        
+        <li class="mb-2">
+          <strong>2. 扫描周边蓝牙设备</strong><br>
+          点击"发送 'AT+SCAN'"按钮，模块将开始扫描并列出周边蓝牙设备<br>
+          <small class="text-muted">※ 扫描结果将在输出框显示，格式为：[序号] MAC地址 信号强度 设备名称</small>
+        </li>
+        
+        <li class="mb-2">
+          <strong>3. 连接目标设备</strong><br>
+          在输入框中输入目标设备的序号x，点击"发送 'AT+CONNECT=x'"按钮<br>
+          <small class="text-muted">※ 连接成功将显示"CONNECT OK"，失败显示"CONNECT FAIL"</small>
+        </li>
+        
+        <li class="mb-2">
+          <strong>4. 退出AT模式（重要）</strong><br>
+          连接成功后，必须点击"发送 'AT+EXIT'"按钮退出AT指令模式<br>
+          <small class="text-muted">※ 退出AT指令模式模块才能进入透传模式</small>
+        </li>
+      </ol>
+      
+      <div class="alert alert-warning mt-3">
+        <strong>注意事项：</strong>
+        <ul class="mb-0">
+          <li>每个AT指令必须等待前一个指令完成（收到"OK"响应）后再发送</li>
+          <li>波特率固定为115200，无需配置</li>
+          <li>连接失败请检查设备是否可被发现且未与其他设备配对</li>
+        </ul>
+      </div>
     </div>
   </div>
 
