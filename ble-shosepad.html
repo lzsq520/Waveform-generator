@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>智能压力鞋垫蓝牙测试界面</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .data-box { font-family: monospace; font-size: 0.9em; height: 300px; }
+        .status-bar { color: #666; margin-top: 10px; }
+        .data-row { margin-top: 5px; }
+        .data-header { border-bottom: 2px solid #ddd; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+<div class="container mt-3">
+    <h3>智能压力鞋垫蓝牙测试界面</h3>
+    
+    <!-- 控制按钮 -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <button class="btn btn-primary" onclick="connectBluetooth()">连接蓝牙</button>
+            <button class="btn btn-danger" onclick="disconnectBluetooth()">断开蓝牙</button>
+            <button class="btn btn-warning" onclick="clearData()">清空数据</button>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="autoScroll" checked>
+                <label class="form-check-label" for="autoScroll">自动滚动</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- 数据接收框 -->
+    <textarea class="form-control data-box" id="dataOutput" readonly></textarea>
+    <div class="status-bar" id="status">设备未连接</div>
+
+    <!-- 数据显示 -->
+    <div class="row mt-3">
+        <div class="col-md-12">
+            <h4 class="mt-4">实时数据显示</h4>
+            <hr class="data-header">
+            <div class="row fw-bold data-row">
+                <div class="col-2">参数</div>
+                <div class="col">1</div><div class="col">2</div><div class="col">3</div><div class="col">4</div>
+                <div class="col">5</div><div class="col">6</div><div class="col">7</div><div class="col">8</div>
+                <div class="col">电池电压</div>
+                <div class="col-2">电池电压(V)</div>
+            </div>
+            <div class="row data-row">
+                <div class="col-2">十六进制</div>
+                <div class="col" id="hex1"></div><div class="col" id="hex2"></div>
+                <div class="col" id="hex3"></div><div class="col" id="hex4"></div>
+                <div class="col" id="hex5"></div><div class="col" id="hex6"></div>
+                <div class="col" id="hex7"></div><div class="col" id="hex8"></div>
+                <div class="col" id="hexBattery"></div>
+                <div class="col-2">-</div>
+            </div>
+            <div class="row data-row">
+                <div class="col-2">十进制</div>
+                <div class="col" id="dec1"></div><div class="col" id="dec2"></div>
+                <div class="col" id="dec3"></div><div class="col" id="dec4"></div>
+                <div class="col" id="dec5"></div><div class="col" id="dec6"></div>
+                <div class="col" id="dec7"></div><div class="col" id="dec8"></div>
+                <div class="col" id="decBattery"></div>
+                <div class="col-2" id="voltage"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let device = null;
+let receiveCharacteristic = null;
+let buffer = new Uint8Array();
+const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const RECEIVE_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+// 修改点1：CRC校验数据范围修正
+function crc16Calculate(data) {
+    let crc = 0xFFFF;
+    for (let i = 0; i < data.length; i++) {
+        crc ^= data[i];
+        for (let j = 0; j < 8; j++) {
+            if (crc & 0x0001) {
+                crc = (crc >> 1) ^ 0xA001;
+            } else {
+                crc = crc >> 1;
+            }
+        }
+    }
+    return crc;
+}
+
+function getTimestamp() {
+    const now = new Date(Date.now() + 8 * 3600 * 1000);
+    return now.toISOString().substr(0, 23).replace('T', ' ').replace(/-/g, '-');
+}
+
+async function connectBluetooth() {
+    try {
+        // 修改为与波形控制界面相同的扫描参数
+        device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,  // 接受所有设备，不限制服务
+            optionalServices: [SERVICE_UUID]  // 将服务UUID设为可选
+        });
+        
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        receiveCharacteristic = await service.getCharacteristic(RECEIVE_UUID);
+        
+        receiveCharacteristic.addEventListener('characteristicvaluechanged', handleData);
+        await receiveCharacteristic.startNotifications();
+        
+        document.getElementById('status').textContent = `已连接设备: ${device.name || '未知设备'}`;
+    } catch (err) {
+        console.error('连接失败:', err);
+        document.getElementById('status').textContent = `连接失败: ${err.message}`;
+    }
+}
+
+function handleData(event) {
+    const value = new Uint8Array(event.target.value.buffer);
+    buffer = new Uint8Array([...buffer, ...value]);
+    
+    while (buffer.length >= 23) {
+        const frame = buffer.slice(0, 23);
+        buffer = buffer.slice(23);
+        processFrame(frame);
+    }
+}
+
+function processFrame(frame) {
+    if (frame[0] !== 0xAA || (frame[1] !== 0xAA && frame[1] !== 0x55)) return;
+
+    // 修改点3：正确截取数据部分进行校验（第4-21字节）
+    const dataPart = frame.slice(3, 21);
+    const crcReceived = (frame[21] << 8) | frame[22];
+    const crcCalculated = crc16Calculate(dataPart);
+    
+    const hexString = Array.from(frame).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+    const timestamp = `[${getTimestamp()}]`;
+    
+    const output = document.getElementById('dataOutput');
+    output.value += `${timestamp} ${hexString}\n`;
+    if (document.getElementById('autoScroll').checked) {
+        output.scrollTop = output.scrollHeight;
+    }
+
+    // 修改点4：添加设备信息显示
+    const deviceNumber = frame[2];
+    const footSide = frame[1] === 0xAA ? '左脚' : '右脚';
+    document.getElementById('status').textContent = `已连接到${deviceNumber}号${footSide}`;
+
+    // 修改点5：调整数据处理逻辑
+    if (crcReceived === crcCalculated) {
+        updateDataDisplay(frame);
+    }
+}
+
+// 修改后的数据显示处理函数
+function updateDataDisplay(frame) {
+    // 压力值处理
+    for(let i=1; i<=8; i++) {
+        const index = 3 + (i-1)*2;
+        const high = frame[index];
+        const low = frame[index+1];
+        
+        // 十六进制显示
+        document.getElementById(`hex${i}`).textContent = 
+            `${high.toString(16).padStart(2,'0')}${low.toString(16).padStart(2,'0')}`.toUpperCase();
+        
+        // 十进制显示
+        const decValue = (high << 8) | low;
+        document.getElementById(`dec${i}`).textContent = decValue;
+    }
+
+    // 电池电压处理
+    const batteryHigh = frame[19];
+    const batteryLow = frame[20];
+    const batteryValue = (batteryHigh << 8) | batteryLow;
+    
+    // 十六进制显示
+    document.getElementById('hexBattery').textContent = 
+        `${batteryHigh.toString(16).padStart(2,'0')}${batteryLow.toString(16).padStart(2,'0')}`.toUpperCase();
+    
+    // 十进制显示
+    document.getElementById('decBattery').textContent = batteryValue;
+    
+    // 电压计算（217.5 * 采样值 / 208845）
+    const voltage = (217.5 * batteryValue / 208845).toFixed(2);
+    document.getElementById('voltage').textContent = `${voltage} V`;
+}
+
+
+function disconnectBluetooth() {
+    if (device && device.gatt.connected) {
+        device.gatt.disconnect();
+        document.getElementById('status').textContent = '设备未连接';
+        document.getElementById('hexData').innerHTML = '';
+        document.getElementById('decData').innerHTML = '';
+    }
+}
+
+function clearData() {
+    document.getElementById('dataOutput').value = '';
+}
+</script>
+</body>
+</html>
