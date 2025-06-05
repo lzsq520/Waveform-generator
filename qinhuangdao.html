@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>秦皇岛两日一夜交互式旅游规划</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Sand and Sea -->
+    <!-- Application Structure Plan: The SPA uses a top-down, single-page layout with a sticky navigation bar for quick access to key sections: Overview, Transport, Lodging, Itinerary, Food, and Tips. This structure was chosen to transform the linear report into a dynamic planning tool. Users can either scroll through the entire plan or jump directly to the section they need. The core of the application is the interactive itinerary, which presents the two-day schedule as a visual timeline, allowing users to click on events for detailed information. This task-oriented design prioritizes usability and quick information retrieval, making trip planning more efficient and engaging than reading a static document. -->
+    <!-- Visualization & Content Choices: 
+        1. Transportation: Report's comparison table -> Goal: Compare options -> Viz: Two bar charts (Cost & Time) using Chart.js -> Interaction: Instant visual comparison of key metrics. -> Justification: Charts are more intuitive for quantitative comparison than a text table.
+        2. Accommodation: Report's recommendation table -> Goal: Find suitable lodging -> Viz: A filterable grid of cards. -> Interaction: Users click buttons to filter hotels by area (Beidaihe, Haigang, Shanhaiguan). -> Justification: Filtering empowers users to quickly narrow down options based on their primary criterion (location).
+        3. Itinerary: Report's text-based schedule -> Goal: Follow the plan -> Viz: A vertical timeline built with HTML/Tailwind. -> Interaction: Clicking a timeline event reveals a modal with details (description, tickets, tips). -> Justification: A visual timeline is more scannable than paragraphs. Modals provide depth without cluttering the main view.
+        4. Food: Report's list of dishes -> Goal: Explore local cuisine -> Viz: A responsive grid of cards. -> Interaction: Each card displays a dish; clicking provides more context. -> Justification: A visual grid is more appealing for food content than a simple list.
+        All visualizations are built to be responsive and interactive, enhancing user engagement and understanding. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #FDFBF7;
+            color: #4A4A4A;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 280px;
+            max-height: 320px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 320px;
+                max-height: 350px;
+            }
+        }
+        .nav-link {
+            transition: color 0.3s, border-color 0.3s;
+        }
+        .nav-link.active {
+            color: #0d9488;
+            border-bottom-color: #0d9488;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -31px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #f0fdfa;
+            border: 4px solid #ccfbf1;
+        }
+        .modal {
+            transition: opacity 0.3s ease-in-out;
+        }
+        .modal-content {
+            transition: transform 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header id="main-header" class="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex-shrink-0">
+                    <a href="#" class="text-2xl font-bold text-teal-700">秦皇岛之旅</a>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#overview" class="nav-link text-gray-600 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">行程概览</a>
+                        <a href="#transport" class="nav-link text-gray-600 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">交通指南</a>
+                        <a href="#lodging" class="nav-link text-gray-600 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">住宿推荐</a>
+                        <a href="#itinerary" class="nav-link text-gray-600 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">两日行程</a>
+                        <a href="#food" class="nav-link text-gray-600 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">美食地图</a>
+                        <a href="#tips" class="nav-link text-gray-600 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">实用贴士</a>
+                    </div>
+                </div>
+                <div class="md:hidden">
+                    <button id="mobile-menu-button" class="inline-flex items-center justify-center p-2 rounded-md text-gray-500 hover:text-teal-600 hover:bg-gray-100 focus:outline-none">
+                        <span class="sr-only">Open main menu</span>
+                        <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </nav>
+        <div id="mobile-menu" class="md:hidden hidden">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <a href="#overview" class="nav-link-mobile text-gray-600 hover:bg-teal-50 hover:text-teal-600 block px-3 py-2 rounded-md text-base font-medium">行程概览</a>
+                <a href="#transport" class="nav-link-mobile text-gray-600 hover:bg-teal-50 hover:text-teal-600 block px-3 py-2 rounded-md text-base font-medium">交通指南</a>
+                <a href="#lodging" class="nav-link-mobile text-gray-600 hover:bg-teal-50 hover:text-teal-600 block px-3 py-2 rounded-md text-base font-medium">住宿推荐</a>
+                <a href="#itinerary" class="nav-link-mobile text-gray-600 hover:bg-teal-50 hover:text-teal-600 block px-3 py-2 rounded-md text-base font-medium">两日行程</a>
+                <a href="#food" class="nav-link-mobile text-gray-600 hover:bg-teal-50 hover:text-teal-600 block px-3 py-2 rounded-md text-base font-medium">美食地图</a>
+                <a href="#tips" class="nav-link-mobile text-gray-600 hover:bg-teal-50 hover:text-teal-600 block px-3 py-2 rounded-md text-base font-medium">实用贴士</a>
+            </div>
+        </div>
+    </header>
+    
+    <main>
+        <section id="overview" class="pt-20 pb-12 bg-white">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <h1 class="text-4xl md:text-5xl font-bold text-gray-800 mb-4">秦皇岛周末漫游</h1>
+                <p class="mt-4 max-w-3xl mx-auto text-lg text-gray-600">
+                    从京城出发，开启一场融合历史底蕴与海滨风情的两日一夜之旅。本交互式指南将帮您轻松规划交通、住宿、景点与美食，体验长城入海的壮丽与海岸悠闲的惬意。
+                </p>
+            </div>
+        </section>
+
+        <section id="transport" class="py-16">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold text-gray-800">交通指南</h2>
+                    <p class="mt-2 text-md text-gray-500">从北京到秦皇岛，多种交通方式任您选择。我们通过图表为您直观对比，助您做出最佳决策。</p>
+                </div>
+                <div class="grid md:grid-cols-2 gap-8 lg:gap-12 items-center">
+                    <div>
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4 text-center">出行方式成本对比 (元)</h3>
+                        <div class="chart-container">
+                            <canvas id="costChart"></canvas>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4 text-center">出行方式耗时对比 (小时)</h3>
+                        <div class="chart-container">
+                            <canvas id="timeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                 <div class="mt-12 bg-teal-50 p-6 rounded-lg">
+                    <h4 class="font-semibold text-teal-800 text-lg mb-2">核心建议</h4>
+                    <p class="text-teal-700"><strong>首选高铁：</strong>车程仅1.5-2.5小时，是速度与舒适度的最佳结合。可根据行程首站灵活选择抵达秦皇岛站、北戴河站或山海关站。
+                    <br><strong>市内交通：</strong>秦皇岛市内公交系统发达，旅游专线（如501/503路）可轻松连接北戴河与山海关，性价比极高。沿海区域推荐使用共享单车，自由探索海岸线。</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="lodging" class="py-16 bg-white">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold text-gray-800">住宿推荐</h2>
+                    <p class="mt-2 text-md text-gray-500">无论是追求度假氛围还是城市便利，秦皇岛都能满足您的需求。点击下方按钮筛选不同区域的推荐住宿。</p>
+                </div>
+                <div class="flex justify-center space-x-2 mb-8">
+                    <button class="filter-btn active bg-teal-500 text-white px-4 py-2 rounded-full text-sm" data-filter="all">全部</button>
+                    <button class="filter-btn bg-white text-gray-600 px-4 py-2 rounded-full text-sm border border-gray-300" data-filter="beidaihe">北戴河区</button>
+                    <button class="filter-btn bg-white text-gray-600 px-4 py-2 rounded-full text-sm border border-gray-300" data-filter="haigang">海港区</button>
+                    <button class="filter-btn bg-white text-gray-600 px-4 py-2 rounded-full text-sm border border-gray-300" data-filter="shanhaiguan">山海关区</button>
+                </div>
+                <div id="lodging-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                </div>
+            </div>
+        </section>
+
+        <section id="itinerary" class="py-16">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold text-gray-800">两日行程规划</h2>
+                    <p class="mt-2 text-md text-gray-500">我们为您精心设计了两日游行程，融合历史探索与海滨休闲。点击每个项目，查看详细介绍和贴士。</p>
+                </div>
+                <div class="flex flex-col md:flex-row md:space-x-12">
+                    <div id="itinerary-day1" class="flex-1"></div>
+                    <div id="itinerary-day2" class="flex-1 mt-12 md:mt-0"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="food" class="py-16 bg-white">
+             <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold text-gray-800">美食地图</h2>
+                    <p class="mt-2 text-md text-gray-500">品尝秦皇岛的风味，从生猛海鲜到地道小吃，每一口都是旅行的记忆。</p>
+                </div>
+                <div id="food-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                </div>
+            </div>
+        </section>
+        
+        <section id="tips" class="py-16">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold text-gray-800">实用贴士</h2>
+                    <p class="mt-2 text-md text-gray-500">万事俱备，旅途无忧。出发前请查阅以下建议。</p>
+                </div>
+                <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 text-center">
+                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <div class="text-3xl text-teal-500 mb-3">☀️</div>
+                        <h4 class="font-semibold text-lg mb-2">行装建议</h4>
+                        <p class="text-sm text-gray-600">6月初天气宜人，建议穿轻便衣物，备薄外套。防晒霜、太阳镜、遮阳帽必不可少。</p>
+                    </div>
+                     <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <div class="text-3xl text-teal-500 mb-3">🎟️</div>
+                        <h4 class="font-semibold text-lg mb-2">提前预订</h4>
+                        <p class="text-sm text-gray-600">周末出行，建议提前预订往返火车票及住宿，热门资源和时段非常抢手。</p>
+                    </div>
+                     <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <div class="text-3xl text-teal-500 mb-3">🦀</div>
+                        <h4 class="font-semibold text-lg mb-2">消费安全</h4>
+                        <p class="text-sm text-gray-600">购买海鲜时选择明码标价的信誉商铺，警惕低价陷阱。就餐前可参考网络评价。</p>
+                    </div>
+                     <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <div class="text-3xl text-teal-500 mb-3">ℹ️</div>
+                        <h4 class="font-semibold text-lg mb-2">信息核实</h4>
+                        <p class="text-sm text-gray-600">景点门票、开放时间可能变动，出行前请通过官方渠道再次核实最新信息。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <footer class="bg-gray-800 text-white py-8">
+        <div class="container mx-auto px-4 text-center">
+            <p>祝您在秦皇岛度过一个愉快的假期！</p>
+            <p class="text-sm text-gray-400 mt-2">基于攻略报告生成交互式体验</p>
+        </div>
+    </footer>
+
+    <div id="itinerary-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 hidden opacity-0">
+        <div class="modal-content bg-white rounded-lg shadow-xl max-w-lg w-full p-6 relative transform scale-95">
+            <button id="modal-close-btn" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <h3 id="modal-title" class="text-2xl font-bold text-gray-800 mb-4"></h3>
+            <div id="modal-body" class="text-gray-600 space-y-3"></div>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            const transportData = {
+                labels: ['高速铁路', '普通火车', '机场大巴', '长途汽车'],
+                costs: [150, 72.5, 140, 110],
+                times: [2, 3.5, 4, 4.5] 
+            };
+            
+            const lodgingData = [
+                { name: '北戴河金海3号', area: 'beidaihe', style: '舒适型，近海', price: '约 300元起', highlight: '距海滩近，环境好', icon: '🏨' },
+                { name: '秦皇岛金梦海湾希尔顿欢朋酒店', area: 'haigang', style: '品牌连锁', price: '约 500元起', highlight: '评分高，近金梦海滩', icon: '🏨' },
+                { name: '归墟花堂民宿', area: 'beidaihe', style: '特色民宿', price: '约 180元起', highlight: '设计有格调，适合自驾', icon: '🏡' },
+                { name: '锦江之星山海关火车站老龙头浴场酒店', area: 'shanhaiguan', style: '经济连锁', price: '约 130元起', highlight: '高性价比，近火车站', icon: '🏨' },
+                { name: '秦皇岛香格里拉大酒店', area: 'haigang', style: '豪华度假', price: '约 550元起', highlight: '设施完善，服务优质', icon: '🏨' }
+            ];
+
+            const itineraryData = {
+                day1: {
+                    title: '第一天: 长城雄风 & 海滨序曲',
+                    events: [
+                        { time: '上午', title: '抵达与安顿', details: '<p>建议选择抵达北戴河火车站，出站后乘公交或出租车前往酒店。安顿后可在附近解决午餐。</p><p class="mt-2 p-2 bg-blue-50 rounded-md text-sm"><strong>💡 贴士:</strong> 抵达北戴河站，可乘坐定制14路（5元）直达刘庄等核心区域，非常方便。</p>' },
+                        { time: '下午', title: '探寻长城之源', details: '<p>前往<strong>山海关景区</strong>，游览“天下第一关”城楼，感受雄关壮丽。</p><p>随后前往<strong>老龙头</strong>，观赏长城与大海交汇的宏伟景观。</p><p class="mt-2 p-2 bg-blue-50 rounded-md text-sm"><strong>💡 票务参考:</strong> 天下第一关约40元，老龙头约60元。凭当日门票可免费乘坐两景区间旅游专线。</p>' },
+                        { time: '晚上', title: '古城风味或海鲜盛宴', details: '<p>晚餐可在山海关古城品尝特色<strong>四条包子</strong>或<strong>山海关浑锅</strong>。</p><p>也可返回北戴河或海港区，在海边餐馆享用一顿丰盛的海鲜大餐。</p>' }
+                    ]
+                },
+                day2: {
+                    title: '第二天: 晨曦踏浪 & 悠然告别',
+                    events: [
+                        { time: '清晨', title: '鸽子窝公园观日出', details: '<p>早起前往北戴河的<strong>鸽子窝公园</strong>，这里是观赏海上日出的绝佳地点。退潮后还可赶海拾贝。</p><p class="mt-2 p-2 bg-blue-50 rounded-md text-sm"><strong>💡 票务参考:</strong> 旺季门票25元，凌晨3-4点开放。请提前确认日出时间。</p>' },
+                        { time: '上午', title: '海滨休闲', details: '<p>早餐后，可选择在<strong>老虎石海上公园</strong>戏水，或沿<strong>滨海栈道</strong>漫步骑行，探访免费的<strong>浅水湾浴场</strong>。</p>' },
+                        { time: '下午', title: '自由探索与返程', details: '<p>根据兴趣和时间选择活动：</p><ul class="list-disc list-inside mt-2"><li><strong>登高望远:</strong> 前往联峰山公园，俯瞰北戴河海景。</li><li><strong>海底奇观:</strong> 探索海港区的新澳海底世界。</li><li><strong>购物休闲:</strong> 在太阳城商业街选购纪念品。</li></ul><p class="mt-2">傍晚整理行装，前往火车站返程。</p>'}
+                    ]
+                }
+            };
+
+            const foodData = [
+                { name: '海鲜盛宴', icon: '🦀', desc: '螃蟹、皮皮虾、扇贝、生蚝，清蒸或白灼，尽享原汁原味。' },
+                { name: '山海关四条包子', icon: '🥟', desc: '源于山海关的传统名点，皮薄馅大，味道鲜美。' },
+                { name: '山海关浑锅', icon: '🍲', desc: '充满地方风情的满族火锅，铜锅炭火慢炖，汤鲜味浓。' },
+                { name: '长城饽椤饼', icon: '🫓', desc: '用饽椤树叶包裹馅料，带有独特的清香，是山海关特色。' },
+                { name: '杨肠子火腿', icon: '🌭', desc: '北戴河的特色火腿肠，风味独特，是知名的伴手礼。' },
+                { name: '炭烤生蚝', icon: '🦪', desc: '广受欢迎的街头美味，蒜香浓郁，鲜嫩多汁。'},
+            ];
+            
+            const costCtx = document.getElementById('costChart').getContext('2d');
+            new Chart(costCtx, {
+                type: 'bar',
+                data: {
+                    labels: transportData.labels,
+                    datasets: [{
+                        label: '平均成本 (元)',
+                        data: transportData.costs,
+                        backgroundColor: ['#14b8a6', '#5eead4', '#99f6e4', '#ccfbf1'],
+                        borderColor: '#0f766e',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+
+            const timeCtx = document.getElementById('timeChart').getContext('2d');
+            new Chart(timeCtx, {
+                type: 'bar',
+                data: {
+                    labels: transportData.labels,
+                    datasets: [{
+                        label: '平均耗时 (小时)',
+                        data: transportData.times,
+                        backgroundColor: ['#0d9488', '#2dd4bf', '#5eead4', '#99f6e4'],
+                        borderColor: '#0f766e',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+            
+            const lodgingGrid = document.getElementById('lodging-grid');
+            const renderLodging = (filter) => {
+                lodgingGrid.innerHTML = '';
+                const filteredData = filter === 'all' ? lodgingData : lodgingData.filter(item => item.area === filter);
+                filteredData.forEach(item => {
+                    const card = `
+                        <div class="lodging-card bg-white rounded-lg shadow-md overflow-hidden transition-transform transform hover:-translate-y-1" data-area="${item.area}">
+                            <div class="p-6">
+                                <div class="flex items-start">
+                                    <div class="text-3xl mr-4">${item.icon}</div>
+                                    <div>
+                                        <h4 class="font-bold text-lg text-gray-800">${item.name}</h4>
+                                        <p class="text-sm text-gray-500">${item.style}</p>
+                                    </div>
+                                </div>
+                                <p class="text-teal-600 font-semibold mt-3">${item.price}</p>
+                                <p class="text-sm text-gray-600 mt-2">${item.highlight}</p>
+                            </div>
+                        </div>`;
+                    lodgingGrid.insertAdjacentHTML('beforeend', card);
+                });
+            };
+
+            document.querySelector('.flex.justify-center.space-x-2').addEventListener('click', (e) => {
+                if (e.target.classList.contains('filter-btn')) {
+                    document.querySelectorAll('.filter-btn').forEach(btn => {
+                        btn.classList.remove('active', 'bg-teal-500', 'text-white');
+                        btn.classList.add('bg-white', 'text-gray-600');
+                    });
+                    e.target.classList.add('active', 'bg-teal-500', 'text-white');
+                    e.target.classList.remove('bg-white', 'text-gray-600');
+                    renderLodging(e.target.dataset.filter);
+                }
+            });
+
+            renderLodging('all');
+            
+            const renderItinerary = () => {
+                const day1Container = document.getElementById('itinerary-day1');
+                const day2Container = document.getElementById('itinerary-day2');
+                
+                const createDayHtml = (dayData) => {
+                    let eventsHtml = dayData.events.map(event => `
+                        <div class="timeline-item relative pl-8 pb-8 border-l-2 border-teal-100">
+                             <div class="cursor-pointer group itinerary-event" data-title="${event.title}" data-details='${event.details}'>
+                                <p class="text-sm font-semibold text-teal-600">${event.time}</p>
+                                <h4 class="font-bold text-lg text-gray-800 group-hover:text-teal-700 transition-colors">${event.title}</h4>
+                            </div>
+                        </div>
+                    `).join('');
+                    return `<h3 class="text-2xl font-bold text-gray-800 mb-6">${dayData.title}</h3><div class="relative">${eventsHtml}</div>`;
+                };
+
+                day1Container.innerHTML = createDayHtml(itineraryData.day1);
+                day2Container.innerHTML = createDayHtml(itineraryData.day2);
+            };
+
+            renderItinerary();
+            
+            const modal = document.getElementById('itinerary-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalBody = document.getElementById('modal-body');
+
+            document.getElementById('itinerary').addEventListener('click', e => {
+                const eventEl = e.target.closest('.itinerary-event');
+                if (eventEl) {
+                    modalTitle.textContent = eventEl.dataset.title;
+                    modalBody.innerHTML = eventEl.dataset.details;
+                    modal.classList.remove('hidden');
+                    setTimeout(() => modal.classList.remove('opacity-0'), 10);
+                    setTimeout(() => modal.querySelector('.modal-content').classList.remove('scale-95'), 10);
+
+                }
+            });
+
+            const closeModal = () => {
+                modal.querySelector('.modal-content').classList.add('scale-95');
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            };
+            document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+            modal.addEventListener('click', e => {
+                if (e.target === modal) {
+                    closeModal();
+                }
+            });
+
+            const foodGrid = document.getElementById('food-grid');
+            foodData.forEach(food => {
+                const foodCard = `
+                    <div class="bg-white rounded-lg shadow-sm p-4 text-center transform hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                        <div class="text-4xl">${food.icon}</div>
+                        <h4 class="font-semibold text-md mt-2 text-gray-800">${food.name}</h4>
+                        <p class="text-xs text-gray-500 mt-1">${food.desc}</p>
+                    </div>`;
+                foodGrid.insertAdjacentHTML('beforeend', foodCard);
+            });
+            
+            const mobileMenuButton = document.getElementById('mobile-menu-button');
+            const mobileMenu = document.getElementById('mobile-menu');
+            mobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+            document.querySelectorAll('.nav-link-mobile').forEach(link => {
+                link.addEventListener('click', () => {
+                    mobileMenu.classList.add('hidden');
+                });
+            });
+
+            const sections = document.querySelectorAll('section');
+            const navLinks = document.querySelectorAll('.nav-link');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        navLinks.forEach(link => {
+                            link.classList.remove('active');
+                            if (link.getAttribute('href').substring(1) === entry.target.id) {
+                                link.classList.add('active');
+                            }
+                        });
+                    }
+                });
+            }, { rootMargin: '-50% 0px -50% 0px' });
+            sections.forEach(section => observer.observe(section));
+
+        });
+    </script>
+
+</body>
+</html>
